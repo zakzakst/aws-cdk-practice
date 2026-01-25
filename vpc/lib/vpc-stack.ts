@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib/core';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { cidrSubnet } from './utils';
 
 export interface VpcStackProps extends cdk.StackProps {
   stage: string;
@@ -45,6 +46,40 @@ export class VpcStack extends cdk.Stack {
       ipAddresses: ec2.IpAddresses.cidr(props.cidr),
       subnetConfiguration,
       natGateways,
+    })
+
+    const cidrBlocks: {[key: string]: string[]} = {
+      'PublicSubnet': [
+        cidrSubnet(props.cidr, 4, 0),
+        cidrSubnet(props.cidr, 4, 1),
+        cidrSubnet(props.cidr, 4, 2),
+      ],
+      'IsolatedSubnet': [
+        cidrSubnet(props.cidr, 4, 4),
+        cidrSubnet(props.cidr, 4, 5),
+        cidrSubnet(props.cidr, 4, 6),
+      ],
+      ...(props.enableNatGateway && {
+        'PrivateSubnet': [
+          cidrSubnet(props.cidr, 4, 8),
+          cidrSubnet(props.cidr, 4, 9),
+          cidrSubnet(props.cidr, 4, 10),
+        ],
+      }),
+    }
+
+    Object.entries(cidrBlocks).forEach(([subnetType, cidrBlockList]) => {
+      cidrBlockList.forEach((cidrBlock, index) => {
+        const cfnSubnet = this
+          .node.findChild('Vpc')
+          .node.findChild(`${subnetType}${index + 1}`)
+          .node.findChild('Subnet') as ec2.CfnSubnet;
+        cfnSubnet.cidrBlock = cidrBlock;
+        cfnSubnet.addPropertyOverride(
+          'Tags.2.Value',
+          `${props.stage}-vpc-cdk-${subnetType}-${index + 1}`
+        )
+      })
     })
   }
 }
