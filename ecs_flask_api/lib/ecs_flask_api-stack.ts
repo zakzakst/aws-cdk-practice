@@ -7,6 +7,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as sm from 'aws-cdk-lib/aws-secretsmanager';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 
 interface EcsFlaskApiStackProps extends cdk.StackProps {
   stage: string;
@@ -95,6 +96,35 @@ export class EcsFlaskApiStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       roleName: `${props.stage}-flask-api-task-role-cdk`
     })
+
+    const albSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'EcsFlaskApiAlbSecurityGroup',
+      {
+        vpc,
+        securityGroupName: `${props.stage}-flask-api-alb-sg-cdk`,
+        // これを入れておかないと、アウトバウンドのすべての通信が許可されるので注意
+        allowAllOutbound: false,
+      }
+    )
+
+    const ecsSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'EcsFlaskApiEcsSecurityGroup',
+      {
+        vpc,
+        securityGroupName: `${props.stage}-flask-api-ecs-sg-cdk`,
+        allowAllOutbound: false,
+      }
+    )
+
+    albSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80));
+
+    albSecurityGroup.addEgressRule(ecsSecurityGroup, ec2.Port.tcp(5000))
+
+    ecsSecurityGroup.addIngressRule(albSecurityGroup, ec2.Port.tcp(5000))
+
+    ecsSecurityGroup.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443))
     
     const taskDefinition = new ecs.FargateTaskDefinition(
       this,
@@ -109,6 +139,17 @@ export class EcsFlaskApiStack extends cdk.Stack {
         family: `${props.stage}-flask-api-cdk`,
       }
     )
+
+    const queue = new sqs.Queue(this, 'EcsTaskQueue');
+
+    taskDefinition.taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ['sqs:SendMessage'],
+        resources: [queue.queueArn],
+      })
+    )
+
+    queue.grantSendMessages(taskDefinition.taskRole)
 
     // ECSタスクのロググループを作成
     const logGroup = new logs.LogGroup(this, 'EcsFlaskApiLogGroup', {
