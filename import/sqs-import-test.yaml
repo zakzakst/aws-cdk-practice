@@ -1,0 +1,17 @@
+---
+Metadata:
+  AWSToolsMetrics:
+    IaC_Generator: "arn:aws:cloudformation:ap-northeast-1:877469891159:generatedTemplate/0ba827cf-3a3b-48f2-b73d-1c19821bf422"
+Resources:
+  SQSQueueTestqueuecdk2:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::SQS::Queue"
+    DeletionPolicy: "Retain"
+    Properties:
+      SqsManagedSseEnabled: true
+      ReceiveMessageWaitTimeSeconds: 0
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600
+      MaximumMessageSize: 1048576
+      VisibilityTimeout: 30
+      QueueName: "test-queue-cdk-2"
