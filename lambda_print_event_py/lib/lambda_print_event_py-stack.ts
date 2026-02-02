@@ -1,16 +1,40 @@
 import * as cdk from 'aws-cdk-lib/core';
 import { Construct } from 'constructs';
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+
+export interface LambdaPrintEventPyStackProps extends cdk.StackProps {
+  stage: string;
+  lambdaZipFileName: string;
+}
+
+const lambdaName = 'print_event_py';
+
+const getLambdaBucket = (stage: string): string => {
+  return `${stage}-lambda-deploy-123456789-apne1`;
+}
+
+export const getSSMParameterName = (stage: string): string => {
+  return `/lambda_zip/${stage}/${lambdaName}`
+}
 
 export class LambdaPrintEventPyStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: LambdaPrintEventPyStackProps) {
     super(scope, id, props);
 
-    // The code that defines your stack goes here
+    // アセットが配置されたS3のバケットのインスタンスを静的メソッドで作成
+    const bucket = s3.Bucket.fromBucketName(
+      this,
+      'LambdaPrintEventPyBucket',
+      getLambdaBucket(props.stage)
+    )
 
-    // example resource
-    // const queue = new sqs.Queue(this, 'LambdaPrintEventPyQueue', {
-    //   visibilityTimeout: cdk.Duration.seconds(300)
-    // });
+    const lambdaFunc = new lambda.Function(this, 'LambdaPrintEventPy', {
+      functionName: `${props.stage}-${lambdaName}-cdk`,
+      code: lambda.Code.fromBucket(bucket, `${lambdaName}/${props.lambdaZipFileName}.zip`),
+      handler: 'main.handler',
+      runtime: lambda.Runtime.PYTHON_3_12,
+      architecture: lambda.Architecture.ARM_64,
+    })
   }
 }
